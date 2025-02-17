@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15 Puzzle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            grid-template-rows: repeat(4, 100px);
+            gap: 5px;
+            margin: 20px auto;
+            width: 420px;
+            height: 420px;
+            position: relative;
+        }
+        .tile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100px;
+            height: 100px;
+            background-color: #f0a500;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out;
+            position: absolute;
+        }
+        .empty {
+            background-color: transparent;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>15 Puzzle</h1>
+    <div id="board"></div>
+    <button id="shuffle">Desordenar</button>
+    <button id="solve">Resolver</button>
+
+    <script>
+        const board = document.getElementById("board");
+        const shuffleBtn = document.getElementById("shuffle");
+        const solveBtn = document.getElementById("solve");
+
+        let tiles = [];
+        let emptyTile = { row: 3, col: 3 };
+
+        // Función para inicializar el tablero
+        function initBoard() {
+            tiles = [];
+            board.innerHTML = "";
+            let num = 1;
+            for (let i = 0; i < 4; i++) {
+                tiles[i] = [];
+                for (let j = 0; j < 4; j++) {
+                    if (i === 3 && j === 3) {
+                        tiles[i][j] = null;
+                        continue;
+                    }
+                    let tile = document.createElement("div");
+                    tile.className = "tile";
+                    tile.textContent = num;
+                    tile.dataset.row = i;
+                    tile.dataset.col = j;
+                    tile.style.transform = `translate(${j * 105}px, ${i * 105}px)`;
+                    tile.addEventListener("click", moveTile);
+                    board.appendChild(tile);
+                    tiles[i][j] = tile;
+                    num++;
+                }
+            }
+        }
+
+        // Función para mover una pieza
+        function moveTile(e) {
+            let tile = e.target;
+            let row = parseInt(tile.dataset.row);
+            let col = parseInt(tile.dataset.col);
+
+            if ((Math.abs(row - emptyTile.row) === 1 && col === emptyTile.col) ||
+                (Math.abs(col - emptyTile.col) === 1 && row === emptyTile.row)) {
+                tiles[emptyTile.row][emptyTile.col] = tile;
+                tiles[row][col] = null;
+
+                tile.dataset.row = emptyTile.row;
+                tile.dataset.col = emptyTile.col;
+                tile.style.transform = `translate(${emptyTile.col * 105}px, ${emptyTile.row * 105}px)`;
+
+                emptyTile = { row, col };
+            }
+        }
+
+        // Función para mezclar las piezas
+        function shuffleBoard() {
+            for (let i = 0; i < 100; i++) {
+                let neighbors = getMovableTiles();
+                let randomTile = neighbors[Math.floor(Math.random() * neighbors.length)];
+                if (randomTile) randomTile.click();
+            }
+        }
+
+        // Función para obtener los tiles móviles (adyacentes al vacío)
+        function getMovableTiles() {
+            let moves = [];
+            let { row, col } = emptyTile;
+            if (row > 0) moves.push(tiles[row - 1][col]);
+            if (row < 3) moves.push(tiles[row + 1][col]);
+            if (col > 0) moves.push(tiles[row][col - 1]);
+            if (col < 3) moves.push(tiles[row][col + 1]);
+            return moves.filter(tile => tile !== null);
+        }
+
+        // Estado objetivo
+        const goalState = [
+            [1, 2, 3, 4],
+            [5, 6, 7, 8],
+            [9, 10, 11, 12],
+            [13, 14, 15, 0]
+        ];
+
+        // Función para verificar si un estado es el objetivo
+        function isGoalState(state) {
+            return JSON.stringify(state) === JSON.stringify(goalState);
+        }
+
+        // Función BFS para resolver el puzzle
+        function bfsSolve(initialState) {
+            let queue = [];
+            let visited = new Set();
+            queue.push({ state: initialState, path: [] });
+
+            while (queue.length > 0) {
+                let currentNode = queue.shift();
+                let currentState = currentNode.state;
+
+                if (isGoalState(currentState)) {
+                    return currentNode.path;
+                }
+
+                visited.add(JSON.stringify(currentState));
+
+                let neighbors = getNeighbors(currentState);
+                for (let neighbor of neighbors) {
+                    if (!visited.has(JSON.stringify(neighbor.state))) {
+                        visited.add(JSON.stringify(neighbor.state));
+                        queue.push({ state: neighbor.state, path: [...currentNode.path, neighbor] });
+                    }
+                }
+            }
+            return null; // No se encontró solución
+        }
+
+        // Función para obtener los vecinos del estado actual
+        function getNeighbors(state) {
+            let neighbors = [];
+            const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]; // Movimientos: arriba, abajo, izquierda, derecha
+            let emptyTile = findEmptyTile(state); // Encuentra el espacio vacío (0)
+
+            for (let [dx, dy] of directions) {
+                let newRow = emptyTile.row + dx;
+                let newCol = emptyTile.col + dy;
+                if (newRow >= 0 && newRow < 4 && newCol >= 0 && newCol < 4) {
+                    // Intercambiar el espacio vacío con una pieza vecina
+                    let newState = JSON.parse(JSON.stringify(state)); // Copiar el estado
+                    [newState[emptyTile.row][emptyTile.col], newState[newRow][newCol]] = [newState[newRow][newCol], newState[emptyTile.row][emptyTile.col]];
+                    neighbors.push({ state: newState, emptyTile: { row: newRow, col: newCol } });
+                }
+            }
+
+            return neighbors;
+        }
+
+        // Función para encontrar la posición del espacio vacío
+        function findEmptyTile(state) {
+            for (let r = 0; r < 4; r++) {
+                for (let c = 0; c < 4; c++) {
+                    if (state[r][c] === 0) return { row: r, col: c };
+                }
+            }
+        }
+
+        // Resolver el puzzle al hacer clic en el botón
+        solveBtn.addEventListener("click", function() {
+            let initialState = getCurrentState(); // Obtener el estado actual del tablero
+            let solution = bfsSolve(initialState);
+
+            if (solution) {
+                console.log("Solución encontrada:", solution);
+                animateSolution(solution); // Función para animar la solución
+            } else {
+                console.log("No se encontró solución.");
+            }
+        });
+
+        // Función para animar la solución
+        function animateSolution(solution) {
+            let step = 0;
+            let interval = setInterval(function() {
+                if (step < solution.length) {
+                    moveTileTo(solution[step].state);
+                    step++;
+                } else {
+                    clearInterval(interval);
+                }
+            }, 500);
+        }
+
+        // Función para mover las piezas en cada paso de la solución
+        function moveTileTo(state) {
+            // Aquí, deberías mover las piezas del estado hacia el siguiente paso
+            // en la animación. Se pueden utilizar transformaciones similares a las que ya tienes.
+        }
+
+        // Mezclar las piezas al hacer clic en el botón
+        shuffleBtn.addEventListener("click", shuffleBoard);
+
+        // Inicializar el tablero
+        initBoard();
+    </script>
+</body>
+</html>

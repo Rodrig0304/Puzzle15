@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>15 Puzzle</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        #board {
+            display: grid;
+            grid-template-columns: repeat(4, 100px);
+            grid-template-rows: repeat(4, 100px);
+            gap: 5px;
+            margin: 20px auto;
+            width: 420px;
+            height: 420px;
+            position: relative;
+        }
+        .tile {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100px;
+            height: 100px;
+            background-color: #f0a500;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: transform 0.5s ease-in-out;
+            position: absolute;
+        }
+        .empty {
+            background-color: transparent;
+        }
+        button {
+            margin: 10px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>15 Puzzle</h1>
+    <div id="board"></div>
+    <button id="shuffle">Desordenar</button>
+    <button id="solve">Resolver</button>
+
+    <script>
+        const board = document.getElementById("board");
+        const shuffleBtn = document.getElementById("shuffle");
+        const solveBtn = document.getElementById("solve");
+
+        let tiles = [];
+        let emptyTile = { row: 3, col: 3 };
+        let initialPositions = [];
+
+        // Función para inicializar el tablero
+        function initBoard() {
+            tiles = [];
+            initialPositions = [];  // Guardar las posiciones iniciales
+            board.innerHTML = "";
+            let num = 1;
+            for (let i = 0; i < 4; i++) {
+                tiles[i] = [];
+                for (let j = 0; j < 4; j++) {
+                    if (i === 3 && j === 3) {
+                        tiles[i][j] = null;
+                        continue;
+                    }
+                    let tile = document.createElement("div");
+                    tile.className = "tile";
+                    tile.textContent = num;
+                    tile.dataset.row = i;
+                    tile.dataset.col = j;
+                    tile.style.transform = `translate(${j * 105}px, ${i * 105}px)`;
+                    tile.addEventListener("click", moveTile);
+                    board.appendChild(tile);
+                    tiles[i][j] = tile;
+
+                    // Guardamos la posición inicial de cada pieza
+                    initialPositions.push({ tile, row: i, col: j });
+                    num++;
+                }
+            }
+        }
+
+        // Función para mover una pieza
+        function moveTile(e) {
+            let tile = e.target;
+            let row = parseInt(tile.dataset.row);
+            let col = parseInt(tile.dataset.col);
+
+            if ((Math.abs(row - emptyTile.row) === 1 && col === emptyTile.col) ||
+                (Math.abs(col - emptyTile.col) === 1 && row === emptyTile.row)) {
+                tiles[emptyTile.row][emptyTile.col] = tile;
+                tiles[row][col] = null;
+
+                tile.dataset.row = emptyTile.row;
+                tile.dataset.col = emptyTile.col;
+                tile.style.transform = `translate(${emptyTile.col * 105}px, ${emptyTile.row * 105}px)`;
+
+                emptyTile = { row, col };
+            }
+        }
+
+        // Función para mezclar las piezas
+        function shuffleBoard() {
+            let moveCount = 0;
+            const maxMoves = 50; // Número máximo de movimientos aleatorios para desordenar
+
+            // Hacer algunos movimientos aleatorios pero válidos
+            let interval = setInterval(() => {
+                if (moveCount < maxMoves) {
+                    let neighbors = getMovableTiles();
+                    let randomTile = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    randomTile.click(); // Ejecutar el movimiento
+                    moveCount++;
+                } else {
+                    clearInterval(interval); // Detener después de realizar los movimientos
+                }
+            }, 100); // Tiempo entre movimientos (ajústalo para hacer el desorden más rápido/lento)
+        }
+
+        // Función para obtener los tiles móviles (adyacentes al vacío)
+        function getMovableTiles() {
+            let moves = [];
+            let { row, col } = emptyTile;
+            if (row > 0) moves.push(tiles[row - 1][col]);
+            if (row < 3) moves.push(tiles[row + 1][col]);
+            if (col > 0) moves.push(tiles[row][col - 1]);
+            if (col < 3) moves.push(tiles[row][col + 1]);
+            return moves.filter(tile => tile !== null);
+        }
+
+        // Función para mover las piezas hacia sus posiciones correctas sin empalmarse
+        function animateSolve() {
+            let step = 0;
+            let interval = setInterval(function() {
+                if (step < initialPositions.length) {
+                    let position = initialPositions[step];
+                    let tile = position.tile;
+
+                    // Mover la pieza hacia su lugar original sin empalmarse
+                    if (tile) {
+                        let targetRow = position.row;
+                        let targetCol = position.col;
+
+                        // Si la pieza está en el lugar correcto, no moverla
+                        if (parseInt(tile.dataset.row) !== targetRow || parseInt(tile.dataset.col) !== targetCol) {
+                            movePieceToTarget(tile, targetRow, targetCol);
+                        }
+                    }
+
+                    step++;
+                } else {
+                    clearInterval(interval); // Detener la animación cuando todas las piezas estén en su lugar
+                }
+            }, 500); // Ajusta la velocidad de la animación cambiando el intervalo
+        }
+
+        // Función para mover una pieza hacia su objetivo de forma correcta
+        function movePieceToTarget(tile, targetRow, targetCol) {
+            let currentRow = parseInt(tile.dataset.row);
+            let currentCol = parseInt(tile.dataset.col);
+
+            let path = getPathToTarget(currentRow, currentCol, targetRow, targetCol);
+            let i = 0;
+
+            let pathInterval = setInterval(() => {
+                if (i < path.length) {
+                    let [newRow, newCol] = path[i];
+                    let targetTile = tiles[newRow][newCol];
+
+                    // Mover la pieza hacia la posición
+                    tile.dataset.row = newRow;
+                    tile.dataset.col = newCol;
+                    tile.style.transform = `translate(${newCol * 105}px, ${newRow * 105}px)`;
+
+                    // Actualizar la posición vacía
+                    emptyTile = { row: newRow, col: newCol };
+
+                    i++;
+                } else {
+                    clearInterval(pathInterval);
+                }
+            }, 500);
+        }
+
+        // Función para obtener el camino para mover la pieza hacia su objetivo
+        function getPathToTarget(startRow, startCol, targetRow, targetCol) {
+            let path = [];
+            let currentRow = startRow;
+            let currentCol = startCol;
+
+            // Obtener la ruta de movimiento a través de piezas adyacentes
+            while (currentRow !== targetRow || currentCol !== targetCol) {
+                if (currentRow < targetRow) {
+                    currentRow++;
+                } else if (currentRow > targetRow) {
+                    currentRow--;
+                }
+
+                if (currentCol < targetCol) {
+                    currentCol++;
+                } else if (currentCol > targetCol) {
+                    currentCol--;
+                }
+
+                path.push([currentRow, currentCol]);
+            }
+
+            return path;
+        }
+
+        // Resolver el puzzle al hacer clic en el botón
+        solveBtn.addEventListener("click", animateSolve);
+
+        // Mezclar las piezas al hacer clic en el botón
+        shuffleBtn.addEventListener("click", shuffleBoard);
+
+        // Inicializar el tablero
+        initBoard();
+    </script>
+</body>
+</html>
